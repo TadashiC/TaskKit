@@ -32,31 +32,6 @@ class Listener<E> {
     }
 }
 
-class AnyListener {
-    
-    private var listerns: [Handler] = []
-    
-    func listen<E, U>(keyPath: KeyPath<E, U>, didUpdate: @escaping (U) -> Void) -> Token {
-        let handler = Handler(keyPath: keyPath, didUpdate)
-        listerns.append(handler)
-        return Token(self, handler)
-    }
-    
-    func unlisten(_ token: Token) {
-        listerns = listerns.filter { $0.id != token.handler.id }
-    }
-    
-    func unlisten<E, U>(_ keyPath: KeyPath<E, U>) {
-        listerns = listerns.filter { $0.keyPath != keyPath }
-    }
-    
-    func notify<E, U>(keyPath: KeyPath<E, U>, value: U) {
-        for handler in listerns where handler.keyPath == keyPath {
-            handler.handler(value)
-        }
-    }
-}
-
 fileprivate class Handler {
     lazy var id: ObjectIdentifier = ObjectIdentifier(self)
     let keyPath: AnyKeyPath
@@ -73,15 +48,18 @@ fileprivate class Handler {
 
 class Token {
     fileprivate let handler: Handler
-    private weak var listener: AnyListener?
+    private var invalidHandler: (Token) -> Void = { _ in }
     
-    fileprivate init(_ listener: AnyListener, _ handler: Handler) {
-        self.listener = listener
+    fileprivate init<T>(_ listener: Listener<T>, _ handler: Handler) {
+        self.invalidHandler = { [weak listener] in
+            
+            listener?.unlisten($0)
+        }
         self.handler = handler
     }
     
     func invalid() {
-        listener?.unlisten(self)
+        invalidHandler(self)
     }
     
     deinit {
