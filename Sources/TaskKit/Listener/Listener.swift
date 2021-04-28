@@ -7,25 +7,35 @@
 
 import Foundation
 
-class Listener {
+public class Listener<E> {
+    private let queue = DispatchQueue(label: "taskkit.listener")
+    private var _listerns: [Handler] = []
+    private var listerns: [Handler] {
+        get {
+            queue.sync { _listerns }
+        }
+        set {
+            queue.sync { _listerns = newValue }
+        }
+    }
     
-    private var listerns: [Handler] = []
+    public init() {}
     
-    func listen<E, U>(keyPath: KeyPath<E, U>, didUpdate: @escaping (U) -> Void) -> Token {
+    public func listen<U>(keyPath: KeyPath<E, U>, didUpdate: @escaping (U) -> Void) -> Token {
         let handler = Handler(keyPath: keyPath, didUpdate)
         listerns.append(handler)
         return Token(self, handler)
     }
     
-    func unlisten(_ token: Token) {
+    public func unlisten(_ token: Token) {
         listerns = listerns.filter { $0.id != token.handler.id }
     }
     
-    func unlisten<E, U>(_ keyPath: KeyPath<E, U>) {
+    public func unlisten<U>(_ keyPath: KeyPath<E, U>) {
         listerns = listerns.filter { $0.keyPath != keyPath }
     }
     
-    func notify<E, U>(keyPath: KeyPath<E, U>, value: U) {
+    public func notify<U>(keyPath: KeyPath<E, U>, value: U) {
         for handler in listerns where handler.keyPath == keyPath {
             handler.handler(value)
         }
@@ -46,17 +56,20 @@ fileprivate class Handler {
     }
 }
 
-class Token {
+public class Token {
     fileprivate let handler: Handler
-    private weak var listener: Listener?
+    private var invalidHandler: (Token) -> Void = { _ in }
     
-    fileprivate init(_ listener: Listener, _ handler: Handler) {
-        self.listener = listener
+    fileprivate init<T>(_ listener: Listener<T>, _ handler: Handler) {
+        self.invalidHandler = { [weak listener] in
+            
+            listener?.unlisten($0)
+        }
         self.handler = handler
     }
     
-    func invalid() {
-        listener?.unlisten(self)
+    public func invalid() {
+        invalidHandler(self)
     }
     
     deinit {

@@ -6,5 +6,6 @@
         <page name='AnyTask'/>
         <page name='Then'/>
         <page name='Pair'/>
+        <page name='Listener'/>
     </pages>
 </playground>
