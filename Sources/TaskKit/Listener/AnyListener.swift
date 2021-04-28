@@ -7,7 +7,32 @@
 
 import Foundation
 
-class Listener {
+class Listener<E> {
+    private let queue = DispatchQueue(label: "taskkit.listener")
+    private var listerns: [Handler] = []
+    
+    func listen<U>(keyPath: KeyPath<E, U>, didUpdate: @escaping (U) -> Void) -> Token {
+        let handler = Handler(keyPath: keyPath, didUpdate)
+        listerns.append(handler)
+        return Token(self, handler)
+    }
+    
+    func unlisten(_ token: Token) {
+        listerns = listerns.filter { $0.id != token.handler.id }
+    }
+    
+    func unlisten<U>(_ keyPath: KeyPath<E, U>) {
+        listerns = listerns.filter { $0.keyPath != keyPath }
+    }
+    
+    func notify<U>(keyPath: KeyPath<E, U>, value: U) {
+        for handler in listerns where handler.keyPath == keyPath {
+            handler.handler(value)
+        }
+    }
+}
+
+class AnyListener {
     
     private var listerns: [Handler] = []
     
@@ -48,9 +73,9 @@ fileprivate class Handler {
 
 class Token {
     fileprivate let handler: Handler
-    private weak var listener: Listener?
+    private weak var listener: AnyListener?
     
-    fileprivate init(_ listener: Listener, _ handler: Handler) {
+    fileprivate init(_ listener: AnyListener, _ handler: Handler) {
         self.listener = listener
         self.handler = handler
     }
